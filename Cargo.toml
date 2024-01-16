@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.79"
+nix = { version = "0.27.1", features = ["ioctl"] }
