@@ -11,6 +11,8 @@ const GET_MODEL_NAME: u16 = 0x1005;
 const GET_SERIAL_NUMBER: u16 = 0x1007;
 const GET_FIRMWARE_VERSION: u16 = 0x100b;
 
+const GET_DIPSW: u16 = 0x1103;
+
 fn main() -> anyhow::Result<()> {
     let dev_path = env::args()
         .nth(1)
@@ -35,6 +37,12 @@ fn main() -> anyhow::Result<()> {
         println!("{code:04x}: {:?}", truncate_nul_str(&message[3..]));
     }
 
+    let message = get_simple(&mut dev, GET_DIPSW)?;
+    println!(
+        "DIP Sw: {:?}",
+        parse_dipsw(&message[3..9].try_into().unwrap())
+    );
+
     Ok(())
 }
 
@@ -45,6 +53,11 @@ fn get_simple<D: Read + Write>(dev: &mut D, command: u16) -> io::Result<[u8; 32]
     dev.write_all(&message)?;
     dev.read_exact(&mut message)?;
     Ok(message)
+}
+
+fn parse_dipsw(data: &[u8; 6]) -> [bool; 6] {
+    // dip-sw bit per byte (not packed)
+    data.map(|v| v != 0)
 }
 
 fn truncate_nul_str(data: &[u8]) -> &BStr {
