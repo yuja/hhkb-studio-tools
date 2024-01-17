@@ -210,13 +210,14 @@ fn set_current_profile<D: Read + Write>(dev: &mut D, id: u16) -> io::Result<()> 
     Ok(())
 }
 
+const MAX_DATA_CHUNK_LEN: u16 = 26; // or 28?
+
 // TODO: Is this a generic function or specific to the profile data?
 #[tracing::instrument(skip(dev))]
 fn read_data<D: Read + Write>(dev: &mut D, start: u16, len: u16) -> io::Result<Vec<u8>> {
-    const MAX_CHUNK_LEN: u16 = 0x1b;
     let mut data = Vec::with_capacity(len.into());
-    for offset in (0..len).step_by(MAX_CHUNK_LEN.into()) {
-        let n: u8 = cmp::min(MAX_CHUNK_LEN, len - offset).try_into().unwrap();
+    for offset in (0..len).step_by(MAX_DATA_CHUNK_LEN.into()) {
+        let n: u8 = cmp::min(MAX_DATA_CHUNK_LEN, len - offset).try_into().unwrap();
         let mut message = [0; 32];
         message[0] = 0x12;
         message[1..3].copy_from_slice(&(start + offset).to_be_bytes());
