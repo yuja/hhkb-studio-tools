@@ -84,10 +84,7 @@ fn run_info(args: &InfoArgs) -> anyhow::Result<()> {
         println!("Firmware version: {}", truncate_nul_str(&message[3..]));
 
         let message = get_simple(&mut dev, GET_DIPSW)?;
-        println!(
-            "DIP Sw: {:?}",
-            parse_dipsw(&message[3..9].try_into().unwrap())
-        );
+        println!("DIP Sw: {:06b}", pack_dipsw(&message[3..9]));
         let index = get_current_profile(&mut dev)?;
         println!("Current profile: {index}");
     }
@@ -233,9 +230,9 @@ fn read_data<D: Read + Write>(dev: &mut D, start: u16, len: u16) -> io::Result<V
     Ok(data)
 }
 
-fn parse_dipsw(data: &[u8; 6]) -> [bool; 6] {
-    // dip-sw bit per byte (not packed)
-    data.map(|v| v != 0)
+fn pack_dipsw(data: &[u8]) -> u8 {
+    // dip-sw bit per byte (not packed), from MSB for pretty printing
+    data.iter().fold(0, |acc, v| (acc << 1) | (v & 1))
 }
 
 fn truncate_nul_str(data: &[u8]) -> &BStr {
