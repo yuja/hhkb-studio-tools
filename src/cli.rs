@@ -1,11 +1,13 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::{cmp, fs, io, mem};
+use std::{cmp, fs, io};
 
 use bstr::BStr;
 use clap::Parser as _;
 use tracing_subscriber::prelude::*;
+
+use crate::layout;
 
 const GET_PRODUCT_NAME: u16 = 0x1001;
 const GET_KEYBOARD_LAYOUT: u16 = 0x1002;
@@ -158,6 +160,9 @@ struct ShowProfileArgs {
     /// Input file [default: stdin]
     #[arg(short, long)]
     input: Option<PathBuf>,
+    /// Print each row ignoring physical layout
+    #[arg(long)]
+    no_layout: bool,
 }
 
 fn run_show_profile(args: &ShowProfileArgs) -> anyhow::Result<()> {
@@ -174,12 +179,21 @@ fn run_show_profile(args: &ShowProfileArgs) -> anyhow::Result<()> {
     );
     for (i, data) in profile_data.chunks_exact(LAYER_DATA_LEN.into()).enumerate() {
         println!("Layer #{i}");
-        for row in data.chunks(15 * mem::size_of::<u16>()) {
-            let scan_codes: Vec<_> = row
-                .chunks_exact(mem::size_of::<u16>())
-                .map(|d| u16::from_be_bytes(d.try_into().unwrap()))
-                .collect();
-            println!("  {scan_codes:04x?}");
+        let scancodes: Vec<_> = data
+            .chunks_exact(2)
+            .map(|d| u16::from_be_bytes(d.try_into().unwrap()))
+            .collect();
+        if args.no_layout {
+            for codes in scancodes.chunks(15) {
+                println!("  {codes:04x?}");
+            }
+        } else {
+            let widths_map = &layout::US_LAYOUT_WIDTHS_MAP;
+            for (codes, widths) in scancodes.chunks(15).zip(widths_map) {
+                let formatted_codes =
+                    layout::format_row(widths, codes.iter().map(|n| format!("{n:04x}")));
+                println!("  {formatted_codes}");
+            }
         }
     }
     Ok(())
