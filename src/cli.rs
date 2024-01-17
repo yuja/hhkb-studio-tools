@@ -1,7 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::{cmp, env, fs, io};
+use std::{cmp, env, fs, io, mem};
 
 use bstr::BStr;
 use clap::Parser as _;
@@ -29,6 +29,7 @@ struct Cli {
 enum Command {
     Info(InfoArgs),
     ReadProfile(ReadProfileArgs),
+    ShowProfile(ShowProfileArgs),
 }
 
 #[derive(Clone, Debug, clap::Args)]
@@ -47,6 +48,7 @@ pub fn run() -> anyhow::Result<()> {
     match &cli.command {
         Command::Info(args) => run_info(args),
         Command::ReadProfile(args) => run_read_profile(args),
+        Command::ShowProfile(args) => run_show_profile(args),
     }
 }
 
@@ -84,6 +86,9 @@ fn run_info(args: &InfoArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+const LAYER_DATA_LEN: u16 = 0xf0;
+const PROFILE_DATA_LEN: u16 = LAYER_DATA_LEN * 4;
+
 /// Fetch keymap profile and save to file
 #[derive(Clone, Debug, clap::Args)]
 struct ReadProfileArgs {
@@ -98,7 +103,6 @@ struct ReadProfileArgs {
 }
 
 fn run_read_profile(args: &ReadProfileArgs) -> anyhow::Result<()> {
-    const PROFILE_DATA_LEN: u16 = 0xf0 * 4;
     let mut dev = open_device(&args.connection)?;
     let data = maybe_switch_profile(&mut dev, args.index, |dev| {
         read_data(dev, 0, PROFILE_DATA_LEN)
@@ -107,6 +111,39 @@ fn run_read_profile(args: &ReadProfileArgs) -> anyhow::Result<()> {
         fs::write(path, data)?;
     } else {
         io::stdout().write_all(&data)?;
+    }
+    Ok(())
+}
+
+/// Show keymap profile data
+#[derive(Clone, Debug, clap::Args)]
+struct ShowProfileArgs {
+    /// Input file [default: stdin]
+    #[arg(short, long)]
+    input: Option<PathBuf>,
+}
+
+fn run_show_profile(args: &ShowProfileArgs) -> anyhow::Result<()> {
+    let profile_data = if let Some(path) = &args.input {
+        fs::read(path)?
+    } else {
+        let mut buf = Vec::with_capacity(PROFILE_DATA_LEN.into());
+        io::stdin().read_to_end(&mut buf)?;
+        buf
+    };
+    anyhow::ensure!(
+        profile_data.len() == PROFILE_DATA_LEN.into(),
+        "unexpected profile data length"
+    );
+    for (i, data) in profile_data.chunks_exact(LAYER_DATA_LEN.into()).enumerate() {
+        println!("Layer #{i}");
+        for row in data.chunks(15 * mem::size_of::<u16>()) {
+            let scan_codes: Vec<_> = row
+                .chunks_exact(mem::size_of::<u16>())
+                .map(|d| u16::from_be_bytes(d.try_into().unwrap()))
+                .collect();
+            println!("  {scan_codes:04x?}");
+        }
     }
     Ok(())
 }
