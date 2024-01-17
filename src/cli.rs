@@ -1,7 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::{cmp, env, fs, io, mem};
+use std::{cmp, fs, io, mem};
 
 use bstr::BStr;
 use clap::Parser as _;
@@ -175,37 +175,6 @@ fn maybe_switch_profile<D: Read + Write, O>(
     res
 }
 
-// TODO: remove
-pub fn run_old() -> anyhow::Result<()> {
-    let dev_path = env::args()
-        .nth(1)
-        .unwrap_or_else(|| "/dev/hidraw1".to_owned());
-    let mut dev = OpenOptions::new().read(true).write(true).open(dev_path)?;
-
-    let message = get_simple(&mut dev, GET_DIPSW)?;
-    println!(
-        "DIP Sw: {:?}",
-        parse_dipsw(&message[3..9].try_into().unwrap())
-    );
-
-    let original_profile = get_current_profile(&mut dev)?;
-    println!("Current profile: {original_profile}");
-    for profile_id in 0..4 {
-        set_current_profile(&mut dev, profile_id)?;
-        let profiles = read_profile_data(&mut dev)?;
-        println!("Profile #{profile_id}");
-        for (layer_id, key_codes) in profiles.iter().enumerate() {
-            println!("  Layer #{layer_id}");
-            for chunk in key_codes.chunks(15) {
-                println!("    {chunk:04x?}");
-            }
-        }
-    }
-    set_current_profile(&mut dev, original_profile)?;
-
-    Ok(())
-}
-
 fn open_device(args: &ConnectionArgs) -> io::Result<File> {
     OpenOptions::new().read(true).write(true).open(&args.device)
 }
@@ -242,22 +211,6 @@ fn set_current_profile<D: Read + Write>(dev: &mut D, id: u16) -> io::Result<()> 
     dev.read_exact(&mut message)?;
     tracing::trace!(?message, "read");
     Ok(())
-}
-
-// TODO: parse keymap
-#[tracing::instrument(skip(dev))]
-fn read_profile_data<D: Read + Write>(dev: &mut D) -> io::Result<Vec<Vec<u16>>> {
-    const PROFILE_DATA_LEN: u16 = 0xf0;
-    let mut layers = Vec::with_capacity(4);
-    for layer_id in 0..4 {
-        let data = read_data(dev, layer_id * PROFILE_DATA_LEN, PROFILE_DATA_LEN)?;
-        let key_codes = data
-            .chunks_exact(2)
-            .map(|d| u16::from_be_bytes(d.try_into().unwrap()))
-            .collect();
-        layers.push(key_codes);
-    }
-    Ok(layers)
 }
 
 // TODO: Is this a generic function or specific to the profile data?
