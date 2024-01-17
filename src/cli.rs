@@ -48,28 +48,32 @@ pub fn run() -> anyhow::Result<()> {
 struct InfoArgs {
     #[command(flatten)]
     connection: ConnectionArgs,
+    /// Show fetched data without interpreting
+    #[arg(long)]
+    raw: bool,
 }
 
 fn run_info(args: &InfoArgs) -> anyhow::Result<()> {
     let mut dev = open_device(&args.connection)?;
-    let message = get_simple(&mut dev, GET_PRODUCT_NAME)?;
-    println!("Product name: {}", truncate_nul_str(&message[3..]));
-    let message = get_simple(&mut dev, GET_MODEL_NAME)?;
-    println!("Model name: {}", truncate_nul_str(&message[3..]));
-    let message = get_simple(&mut dev, GET_SERIAL_NUMBER)?;
-    println!("Serial number: {}", truncate_nul_str(&message[3..]));
-    let message = get_simple(&mut dev, GET_KEYBOARD_LAYOUT)?;
-    println!("Keyboard layout: {}", truncate_nul_str(&message[3..]));
-    let message = get_simple(&mut dev, GET_BOOT_LOADER_VERSION)?;
-    println!("Boot loader version?: {}", truncate_nul_str(&message[3..]));
-    let message = get_simple(&mut dev, GET_FIRMWARE_VERSION)?;
-    println!("Firmware version: {}", truncate_nul_str(&message[3..]));
-
-    for code in 0x1000..0x1010 {
-        let message = get_simple(&mut dev, code)?;
-        println!("{code:04x}: {:?}", truncate_nul_str(&message[3..]));
+    if args.raw {
+        for code in 0x1000..0x1010 {
+            let message = get_simple(&mut dev, code)?;
+            println!("{code:04x}: {:?}", &BStr::new(&message[3..]));
+        }
+    } else {
+        let message = get_simple(&mut dev, GET_PRODUCT_NAME)?;
+        println!("Product name: {}", truncate_nul_str(&message[3..]));
+        let message = get_simple(&mut dev, GET_MODEL_NAME)?;
+        println!("Model name: {}", truncate_nul_str(&message[3..]));
+        let message = get_simple(&mut dev, GET_SERIAL_NUMBER)?;
+        println!("Serial number: {}", truncate_nul_str(&message[3..]));
+        let message = get_simple(&mut dev, GET_KEYBOARD_LAYOUT)?;
+        println!("Keyboard layout: {}", truncate_nul_str(&message[3..]));
+        let message = get_simple(&mut dev, GET_BOOT_LOADER_VERSION)?;
+        println!("Boot loader version?: {}", truncate_nul_str(&message[3..]));
+        let message = get_simple(&mut dev, GET_FIRMWARE_VERSION)?;
+        println!("Firmware version: {}", truncate_nul_str(&message[3..]));
     }
-
     Ok(())
 }
 
