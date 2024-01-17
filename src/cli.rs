@@ -5,6 +5,7 @@ use std::{cmp, env, io};
 
 use bstr::BStr;
 use clap::Parser as _;
+use tracing_subscriber::prelude::*;
 
 const GET_PRODUCT_NAME: u16 = 0x1001;
 const GET_KEYBOARD_LAYOUT: u16 = 0x1002;
@@ -37,6 +38,10 @@ struct ConnectionArgs {
 }
 
 pub fn run() -> anyhow::Result<()> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(io::stderr))
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let cli = Cli::parse();
     match &cli.command {
         Command::Info(args) => run_info(args),
@@ -112,33 +117,42 @@ fn open_device(args: &ConnectionArgs) -> io::Result<File> {
     OpenOptions::new().read(true).write(true).open(&args.device)
 }
 
+#[tracing::instrument(skip(dev))]
 fn get_simple<D: Read + Write>(dev: &mut D, command: u16) -> io::Result<[u8; 32]> {
     let mut message = [0; 32];
     message[0] = 0x02;
     message[1..3].copy_from_slice(&command.to_be_bytes());
+    tracing::trace!(?message, "write");
     dev.write_all(&message)?;
     dev.read_exact(&mut message)?;
+    tracing::trace!(?message, "read");
     Ok(message)
 }
 
+#[tracing::instrument(skip(dev))]
 fn get_current_profile<D: Read + Write>(dev: &mut D) -> io::Result<u16> {
     let message = get_simple(dev, GET_CURRENT_PROFILE)?;
     Ok(u16::from_be_bytes(message[3..5].try_into().unwrap()))
 }
 
+#[tracing::instrument(skip(dev))]
 fn set_current_profile<D: Read + Write>(dev: &mut D, id: u16) -> io::Result<()> {
     let mut message = [0; 32];
     message[0] = 0x03;
     message[1..3].copy_from_slice(&SET_CURRENT_PROFILE.to_be_bytes());
     message[3..5].copy_from_slice(&id.to_be_bytes());
+    tracing::trace!(?message, "write");
     dev.write_all(&message)?;
     // TODO: process response
     dev.read_exact(&mut message)?;
+    tracing::trace!(?message, "read");
     dev.read_exact(&mut message)?;
+    tracing::trace!(?message, "read");
     Ok(())
 }
 
 // TODO: parse keymap
+#[tracing::instrument(skip(dev))]
 fn read_profile_data<D: Read + Write>(dev: &mut D) -> io::Result<Vec<Vec<u16>>> {
     const PROFILE_DATA_LEN: u16 = 0xf0;
     let mut layers = Vec::with_capacity(4);
@@ -154,6 +168,7 @@ fn read_profile_data<D: Read + Write>(dev: &mut D) -> io::Result<Vec<Vec<u16>>> 
 }
 
 // TODO: Is this a generic function or specific to the profile data?
+#[tracing::instrument(skip(dev))]
 fn read_data<D: Read + Write>(dev: &mut D, start: u16, len: u16) -> io::Result<Vec<u8>> {
     const MAX_CHUNK_LEN: u16 = 0x1b;
     let mut data = Vec::with_capacity(len.into());
@@ -163,8 +178,10 @@ fn read_data<D: Read + Write>(dev: &mut D, start: u16, len: u16) -> io::Result<V
         message[0] = 0x12;
         message[1..3].copy_from_slice(&(start + offset).to_be_bytes());
         message[3] = n;
+        tracing::trace!(?message, "write");
         dev.write_all(&message)?;
         dev.read_exact(&mut message)?;
+        tracing::trace!(?message, "read");
         data.extend_from_slice(&message[4..][..n.into()]);
     }
     Ok(data)
