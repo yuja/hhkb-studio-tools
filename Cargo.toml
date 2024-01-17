@@ -9,3 +9,5 @@ edition = "2021"
 anyhow = "1.0.79"
 bstr = "1.9.0"
 clap = { version = "4.4.18", features = ["derive"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
