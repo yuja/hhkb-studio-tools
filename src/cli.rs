@@ -82,6 +82,14 @@ fn run_info(args: &InfoArgs) -> anyhow::Result<()> {
         println!("Boot loader version?: {}", truncate_nul_str(&message[3..]));
         let message = get_simple(&mut dev, GET_FIRMWARE_VERSION)?;
         println!("Firmware version: {}", truncate_nul_str(&message[3..]));
+
+        let message = get_simple(&mut dev, GET_DIPSW)?;
+        println!(
+            "DIP Sw: {:?}",
+            parse_dipsw(&message[3..9].try_into().unwrap())
+        );
+        let index = get_current_profile(&mut dev)?;
+        println!("Current profile: {index}");
     }
     Ok(())
 }
