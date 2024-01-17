@@ -29,6 +29,7 @@ struct Cli {
 enum Command {
     Info(InfoArgs),
     ReadProfile(ReadProfileArgs),
+    WriteProfile(WriteProfileArgs),
     ShowProfile(ShowProfileArgs),
 }
 
@@ -48,6 +49,7 @@ pub fn run() -> anyhow::Result<()> {
     match &cli.command {
         Command::Info(args) => run_info(args),
         Command::ReadProfile(args) => run_read_profile(args),
+        Command::WriteProfile(args) => run_write_profile(args),
         Command::ShowProfile(args) => run_show_profile(args),
     }
 }
@@ -117,6 +119,36 @@ fn run_read_profile(args: &ReadProfileArgs) -> anyhow::Result<()> {
     } else {
         io::stdout().write_all(&data)?;
     }
+    Ok(())
+}
+
+/// Load keymap profile from file
+#[derive(Clone, Debug, clap::Args)]
+struct WriteProfileArgs {
+    #[command(flatten)]
+    connection: ConnectionArgs,
+    /// Input file [default: stdin]
+    #[arg(short, long)]
+    input: Option<PathBuf>,
+    /// Profile index to write [default: current profile]
+    #[arg(long, value_parser = clap::value_parser!(u16).range(0..4))]
+    index: Option<u16>,
+}
+
+fn run_write_profile(args: &WriteProfileArgs) -> anyhow::Result<()> {
+    let data = if let Some(path) = &args.input {
+        fs::read(path)?
+    } else {
+        let mut buf = Vec::with_capacity(PROFILE_DATA_LEN.into());
+        io::stdin().read_to_end(&mut buf)?;
+        buf
+    };
+    anyhow::ensure!(
+        data.len() == PROFILE_DATA_LEN.into(),
+        "unexpected profile data length"
+    );
+    let mut dev = open_device(&args.connection)?;
+    maybe_switch_profile(&mut dev, args.index, |dev| write_data(dev, 0, &data))?;
     Ok(())
 }
 
@@ -217,7 +249,9 @@ const MAX_DATA_CHUNK_LEN: u16 = 26; // or 28?
 fn read_data<D: Read + Write>(dev: &mut D, start: u16, len: u16) -> io::Result<Vec<u8>> {
     let mut data = Vec::with_capacity(len.into());
     for offset in (0..len).step_by(MAX_DATA_CHUNK_LEN.into()) {
-        let n: u8 = cmp::min(MAX_DATA_CHUNK_LEN, len - offset).try_into().unwrap();
+        let n: u8 = cmp::min(MAX_DATA_CHUNK_LEN, len - offset)
+            .try_into()
+            .unwrap();
         let mut message = [0; 32];
         message[0] = 0x12;
         message[1..3].copy_from_slice(&(start + offset).to_be_bytes());
@@ -229,6 +263,25 @@ fn read_data<D: Read + Write>(dev: &mut D, start: u16, len: u16) -> io::Result<V
         data.extend_from_slice(&message[4..][..n.into()]);
     }
     Ok(data)
+}
+
+// TODO: Is this a generic function or specific to the profile data?
+#[tracing::instrument(skip(dev, data))]
+fn write_data<D: Read + Write>(dev: &mut D, start: u16, data: &[u8]) -> io::Result<()> {
+    for (i, chunk) in data.chunks(MAX_DATA_CHUNK_LEN.into()).enumerate() {
+        let offset: u16 = MAX_DATA_CHUNK_LEN * u16::try_from(i).unwrap();
+        let mut message = [0; 32];
+        message[0] = 0x13;
+        message[1..3].copy_from_slice(&(start + offset).to_be_bytes());
+        message[3] = chunk.len().try_into().unwrap();
+        message[4..][..chunk.len()].copy_from_slice(chunk);
+        tracing::trace!(?message, "write");
+        dev.write_all(&message)?;
+        dev.read_exact(&mut message)?;
+        tracing::trace!(?message, "read");
+        // TODO: process response
+    }
+    Ok(())
 }
 
 fn pack_dipsw(data: &[u8]) -> u8 {
