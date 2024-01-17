@@ -1,7 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::{cmp, env, io};
+use std::{cmp, env, fs, io};
 
 use bstr::BStr;
 use clap::Parser as _;
@@ -28,6 +28,7 @@ struct Cli {
 #[derive(Clone, Debug, clap::Subcommand)]
 enum Command {
     Info(InfoArgs),
+    ReadProfile(ReadProfileArgs),
 }
 
 #[derive(Clone, Debug, clap::Args)]
@@ -45,6 +46,7 @@ pub fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match &cli.command {
         Command::Info(args) => run_info(args),
+        Command::ReadProfile(args) => run_read_profile(args),
     }
 }
 
@@ -80,6 +82,52 @@ fn run_info(args: &InfoArgs) -> anyhow::Result<()> {
         println!("Firmware version: {}", truncate_nul_str(&message[3..]));
     }
     Ok(())
+}
+
+/// Fetch keymap profile and save to file
+#[derive(Clone, Debug, clap::Args)]
+struct ReadProfileArgs {
+    #[command(flatten)]
+    connection: ConnectionArgs,
+    /// Output file [default: stdout]
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    /// Profile index to fetch [default: current profile]
+    #[arg(long, value_parser = clap::value_parser!(u16).range(0..4))]
+    index: Option<u16>,
+}
+
+fn run_read_profile(args: &ReadProfileArgs) -> anyhow::Result<()> {
+    const PROFILE_DATA_LEN: u16 = 0xf0 * 4;
+    let mut dev = open_device(&args.connection)?;
+    let data = maybe_switch_profile(&mut dev, args.index, |dev| {
+        read_data(dev, 0, PROFILE_DATA_LEN)
+    })?;
+    if let Some(path) = &args.output {
+        fs::write(path, data)?;
+    } else {
+        io::stdout().write_all(&data)?;
+    }
+    Ok(())
+}
+
+fn maybe_switch_profile<D: Read + Write, O>(
+    dev: &mut D,
+    profile_index: Option<u16>,
+    f: impl FnOnce(&mut D) -> io::Result<O>,
+) -> io::Result<O> {
+    let old_profile_index = if let Some(index) = profile_index {
+        let old_index = get_current_profile(dev)?;
+        set_current_profile(dev, index)?;
+        Some(old_index)
+    } else {
+        None
+    };
+    let res = f(dev);
+    if let Some(index) = old_profile_index {
+        set_current_profile(dev, index)?;
+    }
+    res
 }
 
 // TODO: remove
