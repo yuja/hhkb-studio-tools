@@ -1,8 +1,10 @@
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::{cmp, env, io};
 
 use bstr::BStr;
+use clap::Parser as _;
 
 const GET_PRODUCT_NAME: u16 = 0x1001;
 const GET_KEYBOARD_LAYOUT: u16 = 0x1002;
@@ -16,12 +18,40 @@ const GET_DIPSW: u16 = 0x1103;
 const GET_CURRENT_PROFILE: u16 = 0x1101;
 const SET_CURRENT_PROFILE: u16 = 0x1101;
 
-pub fn run() -> anyhow::Result<()> {
-    let dev_path = env::args()
-        .nth(1)
-        .unwrap_or_else(|| "/dev/hidraw1".to_owned());
-    let mut dev = OpenOptions::new().read(true).write(true).open(dev_path)?;
+#[derive(Clone, Debug, clap::Parser)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
 
+#[derive(Clone, Debug, clap::Subcommand)]
+enum Command {
+    Info(InfoArgs),
+}
+
+#[derive(Clone, Debug, clap::Args)]
+struct ConnectionArgs {
+    /// Path to device file to communicate over
+    #[arg(long, default_value = "/dev/hidraw1")]
+    device: PathBuf,
+}
+
+pub fn run() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+    match &cli.command {
+        Command::Info(args) => run_info(args),
+    }
+}
+
+/// Print information about the connected keyboard
+#[derive(Clone, Debug, clap::Args)]
+struct InfoArgs {
+    #[command(flatten)]
+    connection: ConnectionArgs,
+}
+
+fn run_info(args: &InfoArgs) -> anyhow::Result<()> {
+    let mut dev = open_device(&args.connection)?;
     let message = get_simple(&mut dev, GET_PRODUCT_NAME)?;
     println!("Product name: {}", truncate_nul_str(&message[3..]));
     let message = get_simple(&mut dev, GET_MODEL_NAME)?;
@@ -39,6 +69,16 @@ pub fn run() -> anyhow::Result<()> {
         let message = get_simple(&mut dev, code)?;
         println!("{code:04x}: {:?}", truncate_nul_str(&message[3..]));
     }
+
+    Ok(())
+}
+
+// TODO: remove
+pub fn run_old() -> anyhow::Result<()> {
+    let dev_path = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "/dev/hidraw1".to_owned());
+    let mut dev = OpenOptions::new().read(true).write(true).open(dev_path)?;
 
     let message = get_simple(&mut dev, GET_DIPSW)?;
     println!(
@@ -62,6 +102,10 @@ pub fn run() -> anyhow::Result<()> {
     set_current_profile(&mut dev, original_profile)?;
 
     Ok(())
+}
+
+fn open_device(args: &ConnectionArgs) -> io::Result<File> {
+    OpenOptions::new().read(true).write(true).open(&args.device)
 }
 
 fn get_simple<D: Read + Write>(dev: &mut D, command: u16) -> io::Result<[u8; 32]> {
