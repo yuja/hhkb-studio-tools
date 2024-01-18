@@ -7,7 +7,7 @@ use bstr::BStr;
 use clap::Parser as _;
 use tracing_subscriber::prelude::*;
 
-use crate::layout;
+use crate::{layout, scancode};
 
 const GET_PRODUCT_NAME: u16 = 0x1001;
 const GET_KEYBOARD_LAYOUT: u16 = 0x1002;
@@ -192,7 +192,14 @@ fn run_show_profile(args: &ShowProfileArgs) -> anyhow::Result<()> {
             for (codes, widths) in scancodes.chunks(15).zip(widths_map) {
                 let formatted_codes =
                     layout::format_row(widths, codes.iter().map(|n| format!("{n:04x}")));
+                let formatted_labels = layout::format_row(
+                    widths,
+                    codes
+                        .iter()
+                        .map(|n| scancode::scancode_to_label(*n).unwrap_or("")),
+                );
                 println!("  {formatted_codes}");
+                println!("  {formatted_labels}");
             }
         }
     }
