@@ -1,6 +1,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{cmp, fs, io};
 
 use anyhow::Context as _;
@@ -139,17 +139,7 @@ struct WriteProfileArgs {
 }
 
 fn run_write_profile(args: &WriteProfileArgs) -> anyhow::Result<()> {
-    let data = if let Some(path) = &args.input {
-        fs::read(path).with_context(|| format!("failed to read {}", path.display()))?
-    } else {
-        let mut buf = Vec::with_capacity(PROFILE_DATA_LEN.into());
-        io::stdin().read_to_end(&mut buf)?;
-        buf
-    };
-    anyhow::ensure!(
-        data.len() == PROFILE_DATA_LEN.into(),
-        "unexpected profile data length"
-    );
+    let data = read_profile_data(args.input.as_deref())?;
     let mut dev = open_device(&args.connection)?;
     maybe_switch_profile(&mut dev, args.index, |dev| write_data(dev, 0, &data))?;
     Ok(())
@@ -167,17 +157,7 @@ struct ShowProfileArgs {
 }
 
 fn run_show_profile(args: &ShowProfileArgs) -> anyhow::Result<()> {
-    let profile_data = if let Some(path) = &args.input {
-        fs::read(path).with_context(|| format!("failed to read {}", path.display()))?
-    } else {
-        let mut buf = Vec::with_capacity(PROFILE_DATA_LEN.into());
-        io::stdin().read_to_end(&mut buf)?;
-        buf
-    };
-    anyhow::ensure!(
-        profile_data.len() == PROFILE_DATA_LEN.into(),
-        "unexpected profile data length"
-    );
+    let profile_data = read_profile_data(args.input.as_deref())?;
     for (i, data) in profile_data.chunks_exact(LAYER_DATA_LEN.into()).enumerate() {
         println!("Layer #{i}");
         let scancodes: Vec<_> = data
@@ -205,6 +185,21 @@ fn run_show_profile(args: &ShowProfileArgs) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn read_profile_data(maybe_path: Option<&Path>) -> anyhow::Result<Vec<u8>> {
+    let data = if let Some(path) = &maybe_path {
+        fs::read(path).with_context(|| format!("failed to read {}", path.display()))?
+    } else {
+        let mut buf = Vec::with_capacity(PROFILE_DATA_LEN.into());
+        io::stdin().read_to_end(&mut buf)?;
+        buf
+    };
+    anyhow::ensure!(
+        data.len() == PROFILE_DATA_LEN.into(),
+        "unexpected profile data length"
+    );
+    Ok(data)
 }
 
 fn maybe_switch_profile<D: Read + Write, O>(
