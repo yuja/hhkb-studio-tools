@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::{cmp, fs, io};
 
+use anyhow::Context as _;
 use bstr::BStr;
 use clap::Parser as _;
 use tracing_subscriber::prelude::*;
@@ -117,7 +118,7 @@ fn run_read_profile(args: &ReadProfileArgs) -> anyhow::Result<()> {
         read_data(dev, 0, PROFILE_DATA_LEN)
     })?;
     if let Some(path) = &args.output {
-        fs::write(path, data)?;
+        fs::write(path, data).with_context(|| format!("failed to write {}", path.display()))?;
     } else {
         io::stdout().write_all(&data)?;
     }
@@ -139,7 +140,7 @@ struct WriteProfileArgs {
 
 fn run_write_profile(args: &WriteProfileArgs) -> anyhow::Result<()> {
     let data = if let Some(path) = &args.input {
-        fs::read(path)?
+        fs::read(path).with_context(|| format!("failed to read {}", path.display()))?
     } else {
         let mut buf = Vec::with_capacity(PROFILE_DATA_LEN.into());
         io::stdin().read_to_end(&mut buf)?;
@@ -167,7 +168,7 @@ struct ShowProfileArgs {
 
 fn run_show_profile(args: &ShowProfileArgs) -> anyhow::Result<()> {
     let profile_data = if let Some(path) = &args.input {
-        fs::read(path)?
+        fs::read(path).with_context(|| format!("failed to read {}", path.display()))?
     } else {
         let mut buf = Vec::with_capacity(PROFILE_DATA_LEN.into());
         io::stdin().read_to_end(&mut buf)?;
@@ -225,8 +226,12 @@ fn maybe_switch_profile<D: Read + Write, O>(
     res
 }
 
-fn open_device(args: &ConnectionArgs) -> io::Result<File> {
-    OpenOptions::new().read(true).write(true).open(&args.device)
+fn open_device(args: &ConnectionArgs) -> anyhow::Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&args.device)
+        .with_context(|| format!("failed to open device {}", args.device.display()))
 }
 
 #[tracing::instrument(skip(dev))]
