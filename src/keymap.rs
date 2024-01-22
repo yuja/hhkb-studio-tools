@@ -33,3 +33,32 @@ fn serialize_layer_scancodes_to_toml_string(buffer: &mut String, layer_data: &[u
     }
     buffer.push_str("]\n");
 }
+
+pub fn parse_toml_string(serialized: &str) -> anyhow::Result<Vec<u8>> {
+    let doc: toml::Table = serialized.parse()?;
+    let layers = doc
+        .get("layers")
+        .ok_or_else(|| anyhow::anyhow!("layers not found"))?
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("unexpected type of layers"))?;
+    anyhow::ensure!(layers.len() == 4, "unexpected number of layers");
+
+    let mut profile_data = Vec::with_capacity(PROFILE_DATA_LEN);
+    for layer in layers {
+        let scancodes: Vec<u16> = layer
+            .get("scancodes")
+            .ok_or_else(|| anyhow::anyhow!("scancodes not found"))?
+            .clone()
+            .try_into()?;
+        anyhow::ensure!(
+            scancodes.len() == LAYER_DATA_LEN / 2,
+            "unexpected number of scancodes"
+        );
+        for code in &scancodes {
+            profile_data.extend(code.to_be_bytes());
+        }
+    }
+
+    assert_eq!(profile_data.len(), PROFILE_DATA_LEN);
+    Ok(profile_data)
+}

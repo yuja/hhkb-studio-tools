@@ -1,7 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::{cmp, fs, io};
+use std::{cmp, fs, io, str};
 
 use anyhow::Context as _;
 use bstr::BStr;
@@ -202,11 +202,16 @@ fn read_profile_data(maybe_path: Option<&Path>) -> anyhow::Result<Vec<u8>> {
         io::stdin().read_to_end(&mut buf)?;
         buf
     };
-    anyhow::ensure!(
-        data.len() == PROFILE_DATA_LEN,
-        "unexpected profile data length"
-    );
-    Ok(data)
+    if data.contains(&b'\0') {
+        anyhow::ensure!(
+            data.len() == PROFILE_DATA_LEN,
+            "unexpected profile data length"
+        );
+        Ok(data)
+    } else {
+        let serialized = str::from_utf8(&data).context("invalid profile text")?;
+        keymap::parse_toml_string(serialized)
+    }
 }
 
 fn maybe_switch_profile<D: Read + Write, O>(

@@ -24,10 +24,10 @@ Product name: HHKB-Studio
 $ hhkb-studio-tools read-profile > profile.toml
 ```
 
-4. Show the fetched keymap data and modify it by using binary editor
+4. Show the fetched keymap data and modify it by using text editor
 
 ```shell
-$ hhkb-studio-tools show-profile < profile.bin
+$ hhkb-studio-tools show-profile < profile.toml
 ```
 
 - The keymap data consists of four layers (Base, Fn1, Fn2, and Fn3.)
@@ -36,5 +36,5 @@ $ hhkb-studio-tools show-profile < profile.bin
 5. Load the modified keymap data to the keyboard
 
 ```shell
-$ hhkb-studio-tools write-profile < profile_new.bin
+$ hhkb-studio-tools write-profile < profile_new.toml
 ```
