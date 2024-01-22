@@ -96,8 +96,8 @@ fn run_info(args: &InfoArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-const LAYER_DATA_LEN: u16 = 0xf0;
-const PROFILE_DATA_LEN: u16 = LAYER_DATA_LEN * 4;
+const LAYER_DATA_LEN: usize = 0xf0;
+const PROFILE_DATA_LEN: usize = LAYER_DATA_LEN * 4;
 
 /// Fetch keymap profile and save to file
 #[derive(Clone, Debug, clap::Args)]
@@ -115,7 +115,7 @@ struct ReadProfileArgs {
 fn run_read_profile(args: &ReadProfileArgs) -> anyhow::Result<()> {
     let mut dev = open_device(&args.connection)?;
     let data = maybe_switch_profile(&mut dev, args.index, |dev| {
-        read_data(dev, 0, PROFILE_DATA_LEN)
+        read_data(dev, 0, PROFILE_DATA_LEN.try_into().unwrap())
     })?;
     if let Some(path) = &args.output {
         fs::write(path, data).with_context(|| format!("failed to write {}", path.display()))?;
@@ -158,7 +158,7 @@ struct ShowProfileArgs {
 
 fn run_show_profile(args: &ShowProfileArgs) -> anyhow::Result<()> {
     let profile_data = read_profile_data(args.input.as_deref())?;
-    for (i, data) in profile_data.chunks_exact(LAYER_DATA_LEN.into()).enumerate() {
+    for (i, data) in profile_data.chunks_exact(LAYER_DATA_LEN).enumerate() {
         println!("Layer #{i}");
         let scancodes: Vec<_> = data
             .chunks_exact(2)
@@ -191,12 +191,12 @@ fn read_profile_data(maybe_path: Option<&Path>) -> anyhow::Result<Vec<u8>> {
     let data = if let Some(path) = &maybe_path {
         fs::read(path).with_context(|| format!("failed to read {}", path.display()))?
     } else {
-        let mut buf = Vec::with_capacity(PROFILE_DATA_LEN.into());
+        let mut buf = Vec::with_capacity(PROFILE_DATA_LEN);
         io::stdin().read_to_end(&mut buf)?;
         buf
     };
     anyhow::ensure!(
-        data.len() == PROFILE_DATA_LEN.into(),
+        data.len() == PROFILE_DATA_LEN,
         "unexpected profile data length"
     );
     Ok(data)
