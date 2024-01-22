@@ -8,7 +8,8 @@ use bstr::BStr;
 use clap::Parser as _;
 use tracing_subscriber::prelude::*;
 
-use crate::{layout, scancode};
+use crate::keymap::{LAYER_DATA_LEN, PROFILE_DATA_LEN};
+use crate::{keymap, layout, scancode};
 
 const GET_PRODUCT_NAME: u16 = 0x1001;
 const GET_KEYBOARD_LAYOUT: u16 = 0x1002;
@@ -96,9 +97,6 @@ fn run_info(args: &InfoArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-const LAYER_DATA_LEN: usize = 0xf0;
-const PROFILE_DATA_LEN: usize = LAYER_DATA_LEN * 4;
-
 /// Fetch keymap profile and save to file
 #[derive(Clone, Debug, clap::Args)]
 struct ReadProfileArgs {
@@ -107,6 +105,9 @@ struct ReadProfileArgs {
     /// Output file [default: stdout]
     #[arg(short, long)]
     output: Option<PathBuf>,
+    /// Output raw binary data
+    #[arg(long)]
+    raw: bool,
     /// Profile index to fetch [default: current profile]
     #[arg(long, value_parser = clap::value_parser!(u16).range(0..4))]
     index: Option<u16>,
@@ -117,10 +118,16 @@ fn run_read_profile(args: &ReadProfileArgs) -> anyhow::Result<()> {
     let data = maybe_switch_profile(&mut dev, args.index, |dev| {
         read_data(dev, 0, PROFILE_DATA_LEN.try_into().unwrap())
     })?;
-    if let Some(path) = &args.output {
-        fs::write(path, data).with_context(|| format!("failed to write {}", path.display()))?;
+    let serialized = if args.raw {
+        data
     } else {
-        io::stdout().write_all(&data)?;
+        keymap::serialize_to_toml_string(&data).into_bytes()
+    };
+    if let Some(path) = &args.output {
+        fs::write(path, serialized)
+            .with_context(|| format!("failed to write {}", path.display()))?;
+    } else {
+        io::stdout().write_all(&serialized)?;
     }
     Ok(())
 }

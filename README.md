@@ -21,7 +21,7 @@ Product name: HHKB-Studio
 3. Fetch the current keymap data (of the current profile)
 
 ```shell
-$ hhkb-studio-tools read-profile > profile.bin
+$ hhkb-studio-tools read-profile > profile.toml
 ```
 
 4. Show the fetched keymap data and modify it by using binary editor
