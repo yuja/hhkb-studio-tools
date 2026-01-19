@@ -1,8 +1,8 @@
 Linux tool to modify HHKB Studio keymap
 =======================================
-# Installation
 -----
-## Nix
+## Installation
+### Nix
 ```nix
 # Test with nix run:
 nix run github:yuja/hhkb-studio-tools
@@ -32,8 +32,8 @@ outputs = {
 }
 ```
 
-# Usage
 -----
+## Usage
 1. Find `/dev/hidraw*` device to communicate and adjust permission
 
 ```shell
