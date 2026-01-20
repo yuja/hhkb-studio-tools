@@ -1,8 +1,10 @@
 Linux tool to modify HHKB Studio keymap
 =======================================
------
+
 ## Installation
+
 ### Nix
+
 ```nix
 # Test with nix run:
 nix run github:yuja/hhkb-studio-tools
@@ -25,15 +27,15 @@ outputs = {
 
 # In your configuration.nix
 {  inputs, ...}:{
-# Your other configurations 
+# Your other configurations
   environment.systemPackages = with pkgs; [
     inputs.hhkb-studio-tools.packages.${$system}.default
   ];
 }
 ```
 
------
 ## Usage
+
 1. Find `/dev/hidraw*` device to communicate and adjust permission
 
 ```shell
