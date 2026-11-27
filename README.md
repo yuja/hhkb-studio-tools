@@ -34,6 +34,20 @@ outputs = {
 }
 ```
 
+### Debian and derivatives
+
+An unofficial package is available from
+[hhkb-studio-tools-deb](https://github.com/adericbourg/hhkb-studio-tools-deb):
+
+```shell
+sudo curl -fsSLo /usr/share/keyrings/hhkb-studio-tools.gpg https://www.dericbourg.net/hhkb-studio-tools-deb/hhkb-studio-tools.gpg
+echo "deb [signed-by=/usr/share/keyrings/hhkb-studio-tools.gpg] https://www.dericbourg.net/hhkb-studio-tools-deb ./" | sudo tee /etc/apt/sources.list.d/hhkb-studio-tools.list
+sudo apt update && sudo apt install hhkb-studio-tools
+```
+
+A standalone `.deb` is also attached to each
+[release](https://github.com/adericbourg/hhkb-studio-tools-deb/releases/latest).
+
 ## Usage
 
 1. Find `/dev/hidraw*` device to communicate and adjust permission
